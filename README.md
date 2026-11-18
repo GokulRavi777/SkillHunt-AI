@@ -1,18 +1,18 @@
-# SkillHunt AI — Technical Interview Intelligence Platform
+# SkillHunt AI — Autonomous Voice Technical Interviewer
 
-SkillHunt AI is a state-of-the-art real-time conversational technical interview platform built with Python, React 19, FastAPI, LangChain, and FastMCP. It conducts structured, oral technical assessments using **Gnani STT** (`en-IN`), **Google Gemini** (`gemini-3.5-flash-lite`), and **Gnani TTS** (`Nalini` voice, `timbre-v2.5` model) over real-time WebRTC and Web Audio pipelines.
+SkillHunt AI is a cloud-native, real-time conversational technical interview platform built with LiveKit Agents, LangChain, FastMCP, and Gnani Speech AI. It conducts hands-free, oral technical assessments directly inside the **LiveKit Cloud Console / Playground** or via direct WebRTC room connections using **Gnani STT** (`en-IN`), **Google Gemini** (`gemini-3.5-flash-lite`), and **Gnani TTS** (`Nalini` voice, `timbre-v2.5` model).
 
 ---
 
 ## 🌟 Key Capabilities
 
-1. **Automated Resume Parsing & Skill Extraction**:
-   - Parses PDF, DOCX, and TXT resumes with section boundary detection and confidence scoring.
-   - 113+ technical skills mapped across languages, backend frameworks, cloud, data, and devops.
+1. **Direct LiveKit Cloud Console Integration**:
+   - Zero custom frontend dependencies; the candidate connects directly via the LiveKit Cloud Playground or LiveKit Meet.
+   - Real-time bidirectional WebRTC audio streaming with Silero VAD turn detection.
 
 2. **Full Lifecycle Conversational Interviewing**:
-   - **Opening Greeting & Readiness Gate**: Welcomes the candidate by name and strictly gates Question 1 until readiness is confirmed.
-   - **Dynamic Few-Shot Question Generation**: Calibrated across Beginner, Intermediate, and Expert tiers tailored to parsed resume skills.
+   - **Opening Greeting & Readiness Gate**: Welcomes the candidate and strictly gates Question 1 until readiness is confirmed.
+   - **Dynamic Few-Shot Question Generation**: Calibrated across Beginner, Intermediate, and Expert tiers tailored to technical skills.
    - **Single Global Follow-Up**: Maximum 1 deep-dive technical follow-up probe across the entire interview.
    - **Vague Answer Elaboration Quota**: Probes for elaboration maximum 1 time per question if candidate answer lacks depth.
    - **Repetition Limits**: Repeats active question at most twice before moving forward.
@@ -22,8 +22,8 @@ SkillHunt AI is a state-of-the-art real-time conversational technical interview 
 
 3. **Audio & Voice Intelligence**:
    - **Studio-Grade Text-to-Speech**: Authentic Indian English pronunciation via Gnani TTS (Nalini).
-   - **Ultra-Fast Speech Recognition**: Sub-100ms transcription with Gnani STT and Gemini multimodal fallback.
-   - **3D Glowing Orb Visualizer**: Real-time volume RMS animation reacting to speech cadence.
+   - **Ultra-Fast Speech Recognition**: Sub-100ms streaming transcription with Gnani STT.
+   - **Silero VAD**: Low-latency voice activity detection with fixed endpointing.
 
 ---
 
@@ -32,32 +32,20 @@ SkillHunt AI is a state-of-the-art real-time conversational technical interview 
 ```
 Candidate Microphone
         │
-        ▼ (Web Audio / WebRTC)
-  Frontend Client (React 19 + Vite + Tailwind)
+        ▼ (WebRTC Audio Stream)
+  LiveKit Cloud Console / Playground
         │
-        ▼ POST /api/interview/transcribe (Audio Blob)
-  FastAPI Backend (backend/app.py)
-        ├── Gnani STT (REST API @ api.vachana.ai, en-IN)
-        └── Gemini 3.5 Flash Lite Multimodal Audio Fallback
+        ▼ (LiveKit RTC Room)
+  SkillHunt AI Agent Worker (agent.py)
+        ├── Silero VAD (Voice Activity Detection & Endpointing)
+        ├── Gnani STT (Streaming Speech-to-Text, en-IN)
+        ├── LangChain Conversation Orchestrator (orchestration/conversation.py)
+        │      ├── Dynamic FastMCP Tool Suite (mcp_server/server.py)
+        │      └── Google Gemini 3.5 Flash Lite LLM
+        └── Gnani TTS (WebRTC Audio Synthesis, Nalini, timbre-v2.5)
         │
-        ▼ Transcribed Text
-  LangChain Conversation Orchestrator (orchestration/conversation.py)
-        │
-        ▼ Dynamic System Prompts & Instructions
-  FastMCP Server (mcp_server/server.py)
-        ├── get_state_instruction()
-        ├── generate_few_shot_question()
-        └── InMemorySessionStore (Responses & Metrics)
-        │
-        ▼ Response Generation
-  Gemini 3.5 Flash Lite LLM
-        │
-        ▼ Synthesized Voice Text
-  FastAPI Backend (POST /api/interview/tts)
-        └── Gnani TTS (Nalini, timbre-v2.5, en-IN)
-        │
-        ▼ (WAV Audio Stream)
-  Candidate Speaker / Headphones
+        ▼ (WebRTC Audio Track)
+Candidate Speaker / Headphones
 ```
 
 ---
@@ -81,22 +69,36 @@ GEMINI_API_KEY=your_gemini_key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-### 2. Backend Startup
+### 2. Start the LiveKit Agent Worker
+Run the agent in development mode (auto-reload on changes):
 ```bash
-uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+python agent.py dev
+```
+Or run in production mode:
+```bash
+python agent.py start
 ```
 
-### 3. Frontend Startup
+### 3. Conduct Interview in LiveKit Cloud Console
+1. Log into your LiveKit Cloud dashboard: [https://cloud.livekit.io](https://cloud.livekit.io)
+2. Open your project (`vani-2-0-1khnawsy`).
+3. Navigate to **Playground** or **Agents**.
+4. Click **Connect** with your microphone enabled.
+5. SkillHunt AI will automatically greet you and begin the conversational interview!
+
+Alternatively, generate a 1-click shareable test link for candidates:
 ```bash
-cd frontend
-npm install
-npm run dev
+python share_with_friends.py --name "Candidate Name"
 ```
-Open **`http://localhost:5173`** in your browser.
 
 ---
 
 ## 🧪 Testing
+
+Execute the comprehensive 62-case test suite:
+```bash
+pytest tests/
+```
 
 Run the full pytest suite (62/62 passing tests):
 ```bash

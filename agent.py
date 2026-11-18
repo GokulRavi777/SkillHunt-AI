@@ -392,13 +392,12 @@ def create_agent_session(
 
 
 server = AgentServer()
-agent_name = os.environ.get("LIVEKIT_AGENT_NAME", "vani-interviewer")
 
 
-@server.rtc_session(agent_name=agent_name)
+@server.rtc_session()
 async def entrypoint(ctx: JobContext) -> None:
     """LiveKit agent worker entrypoint called upon room assignment."""
-    logger.info(f"VANI agent job received. Connecting to room: {ctx.room.name}")
+    logger.info(f"SkillHunt AI agent job received. Connecting to room: {ctx.room.name}")
     ctx.log_context_fields = {"room": ctx.room.name}
 
     config = VaniConfig.from_env()
@@ -409,7 +408,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = create_agent_session(config)
 
-    logger.info("Starting VANI AgentSession in room %s", ctx.room.name)
+    logger.info("Starting SkillHunt AI AgentSession in room %s", ctx.room.name)
     await session.start(
         agent=VaniInterviewAgent(config=config),
         room=ctx.room,
@@ -418,7 +417,10 @@ async def entrypoint(ctx: JobContext) -> None:
             audio_output=room_io.AudioOutputOptions(sample_rate=16000),
         ),
     )
-    await ctx.connect()
+
+
+# Alias for backwards compatibility
+SkillHuntInterviewAgent = VaniInterviewAgent
 
 
 if __name__ == "__main__":

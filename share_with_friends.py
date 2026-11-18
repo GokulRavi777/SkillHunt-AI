@@ -36,7 +36,7 @@ def generate_share_link(
     if not livekit_url or not api_key or not api_secret:
         raise ValueError("Missing LIVEKIT_URL, LIVEKIT_API_KEY, or LIVEKIT_API_SECRET in .env.")
 
-    room = room_name or f"vani-interview-{uuid.uuid4().hex[:6]}"
+    room = room_name or f"skillhunt-interview-{uuid.uuid4().hex[:6]}"
     identity = f"candidate-{uuid.uuid4().hex[:6]}"
 
     # Generate AccessToken valid for expiry_hours
@@ -71,7 +71,7 @@ def generate_share_link(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate 1-click VANI test links for friends")
+    parser = argparse.ArgumentParser(description="Generate 1-click SkillHunt AI test links for friends")
     parser.add_argument("--name", default="Guest Candidate", help="Name of the friend testing")
     parser.add_argument("--room", default=None, help="Optional custom room name")
     parser.add_argument("--hours", type=int, default=24, help="Token validity in hours (default: 24)")
@@ -84,7 +84,7 @@ def main():
     )
 
     print("\n" + "=" * 60)
-    print("🚀 VANI 2.0 — 1-CLICK SHAREABLE TEST LINK")
+    print("🚀 SkillHunt AI — 1-CLICK SHAREABLE TEST LINK")
     print("=" * 60)
     print(f"Candidate: {info['candidate_name']}")
     print(f"Room:      {info['room_name']}")
