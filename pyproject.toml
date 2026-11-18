@@ -1,0 +1,18 @@
+[project]
+name = "skillhunt-ai"
+version = "0.1.0"
+description = "SkillHunt AI - Technical Interview Intelligence Platform"
+requires-python = ">=3.10"
+dependencies = [
+    "livekit-agents>=1.8.12",
+    "livekit-plugins-gnani>=1.8.12",
+    "livekit-plugins-google>=1.8.12",
+    "livekit-plugins-silero>=1.8.12",
+    "python-dotenv>=1.0.0",
+    "langchain-google-genai>=4.5.0",
+    "langchain-mcp-adapters>=0.3.2",
+    "mcp<2",
+]
+
+[tool.uv]
+package = false
