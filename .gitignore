@@ -33,3 +33,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Documentation and tests (Option 1 clean repo)
+docs/
+tests/
+studio.py
+langgraph.json
