@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "vani": "./studio.py:vani_graph"
+  },
+  "env": ".env"
+}
