@@ -3,6 +3,11 @@
 *.env
 .env.local
 
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Python artifacts
 __pycache__/
 *.py[cod]

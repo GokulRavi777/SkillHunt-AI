@@ -47,6 +47,10 @@ async def entrypoint(ctx: JobContext) -> None:
     session_id = ctx.room.name
     logger.info(f"Initializing VANI 2.0 Interview Session for room: {session_id}")
 
+    # Section 8 Requirement: Initialize session state with preselected Python skill
+    sess = session_manager.get_or_create(session_id)
+    sess.selected_skill = "Python"
+
     ctx.log_context_fields = {
         "room": session_id,
         "agent": settings.AGENT_NAME,
@@ -101,11 +105,34 @@ async def entrypoint(ctx: JobContext) -> None:
         def on_session_close(*args: Any) -> None:
             logger.info(f"Cleaning up in-memory session memory on session close for: {session_id}")
             llm_adapter.cancel_prep_timer()
+            llm_adapter.cancel_answer_timer()
+            try:
+                from backend.app.database import SessionLocal
+                from backend.app.models import InterviewSession
+                from datetime import datetime
+                sess_obj = session_manager.get(session_id)
+                with SessionLocal() as db:
+                    db_sess = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+                    if db_sess and db_sess.session_status in ["CREATED", "CONNECTING", "IN_PROGRESS"]:
+                        if sess_obj and sess_obj.is_terminated():
+                            db_sess.session_status = sess_obj.session_status
+                            db_sess.terminal_outcome = sess_obj.terminal_outcome
+                        else:
+                            db_sess.session_status = "TERMINATED"
+                            db_sess.terminal_outcome = "CANDIDATE_DISCONNECTED"
+                        if not db_sess.completed_at:
+                            db_sess.completed_at = datetime.utcnow()
+                            if db_sess.started_at:
+                                db_sess.duration_seconds = round((db_sess.completed_at - db_sess.started_at).total_seconds(), 2)
+                        db.commit()
+            except Exception as db_err:
+                logger.warning(f"Failed to record session disconnect in DB: {db_err}")
             session_manager.cleanup(session_id)
 
         async def on_shutdown() -> None:
             logger.info(f"Cleaning up in-memory session memory on job shutdown for: {session_id}")
             llm_adapter.cancel_prep_timer()
+            llm_adapter.cancel_answer_timer()
             session_manager.cleanup(session_id)
 
         ctx.add_shutdown_callback(on_shutdown)

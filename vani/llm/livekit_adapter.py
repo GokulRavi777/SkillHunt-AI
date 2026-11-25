@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Any, Optional
 from livekit.agents import llm, utils
@@ -59,6 +60,13 @@ class VaniInterviewerLLM(llm.LLM):
                 timeout_msg = await interview_engine.handle_answer_timeout(self.session_id)
                 if timeout_msg and self._agent_session:
                     logger.info(f"Answer timer expired for session {self.session_id}; advancing question")
+                    if self._room and hasattr(self._room, "local_participant") and self._room.local_participant:
+                        try:
+                            import json
+                            payload = json.dumps({"type": "transcript", "sender": "Vani", "text": timeout_msg}).encode("utf-8")
+                            await self._room.local_participant.publish_data(payload, reliable=True)
+                        except Exception as e:
+                            logger.warning(f"Error publishing answer timeout transcript: {e}")
                     await self._agent_session.say(timeout_msg)
         except asyncio.CancelledError:
             logger.info(f"Answer timer cancelled early for session {self.session_id}")
@@ -80,6 +88,13 @@ class VaniInterviewerLLM(llm.LLM):
                 timeout_msg = await interview_engine.handle_preparation_timeout(self.session_id)
                 if timeout_msg and self._agent_session:
                     logger.info(f"Preparation timer expired for {self.session_id}; asking readiness confirmation")
+                    if self._room and hasattr(self._room, "local_participant") and self._room.local_participant:
+                        try:
+                            import json
+                            payload = json.dumps({"type": "transcript", "sender": "Vani", "text": timeout_msg}).encode("utf-8")
+                            await self._room.local_participant.publish_data(payload, reliable=True)
+                        except Exception as e:
+                            logger.warning(f"Error publishing prep timeout transcript: {e}")
                     await self._agent_session.say(timeout_msg)
                     
                     # Wait for confirmation timeout
@@ -88,6 +103,13 @@ class VaniInterviewerLLM(llm.LLM):
                         logger.info(f"Confirmation timeout expired for {self.session_id}; terminating politely")
                         term_msg = await interview_engine.handle_confirmation_timeout(self.session_id)
                         if term_msg:
+                            if self._room and hasattr(self._room, "local_participant") and self._room.local_participant:
+                                try:
+                                    import json
+                                    payload = json.dumps({"type": "transcript", "sender": "Vani", "text": term_msg}).encode("utf-8")
+                                    await self._room.local_participant.publish_data(payload, reliable=True)
+                                except Exception as e:
+                                    logger.warning(f"Error publishing confirmation timeout transcript: {e}")
                             await self._agent_session.say(term_msg)
                             await asyncio.sleep(5.0)
                             if self._room:
@@ -181,10 +203,29 @@ class VaniInterviewerLLMStream(llm.LLMStream):
                 # Candidate spoke: cancel running preparation and answer timers immediately
                 self.llm.cancel_prep_timer()
                 self.llm.cancel_answer_timer()
+                
+                # Broadcast Candidate transcript to room data channel
+                if self.llm._room and hasattr(self.llm._room, "local_participant") and self.llm._room.local_participant:
+                    try:
+                        import json
+                        c_payload = json.dumps({"type": "transcript", "sender": "Candidate", "text": last_user_message}).encode("utf-8")
+                        await self.llm._room.local_participant.publish_data(c_payload, reliable=True)
+                    except Exception as err:
+                        logger.warning(f"Error publishing candidate transcript: {err}")
+
                 # Process candidate turn through LangGraph
                 response_text = await interview_engine.handle_candidate_utterance(
                     self.session_id, last_user_message
                 )
+
+            # Broadcast Vani transcript to room data channel
+            if self.llm._room and hasattr(self.llm._room, "local_participant") and self.llm._room.local_participant and response_text:
+                try:
+                    import json
+                    v_payload = json.dumps({"type": "transcript", "sender": "Vani", "text": response_text}).encode("utf-8")
+                    await self.llm._room.local_participant.publish_data(v_payload, reliable=True)
+                except Exception as err:
+                    logger.warning(f"Error publishing Vani transcript: {err}")
 
             # Stream words/sentences to LiveKit TTS
             chunk_id = utils.shortuuid("VANI_")
@@ -229,8 +270,33 @@ class VaniInterviewerLLMStream(llm.LLMStream):
             await asyncio.sleep(delay)
             sess = session_manager.get(self.session_id)
             if sess:
-                sess.finalize_assessment()
+                final_assessment = sess.finalize_assessment()
                 sess.mark_cleanup_completed()
+
+                # Sync to SQLite database for candidate portal results
+                try:
+                    import json
+                    from datetime import datetime
+                    from backend.app.database import SessionLocal
+                    from backend.app.models import InterviewSession
+
+                    with SessionLocal() as db:
+                        db_sess = db.query(InterviewSession).filter(InterviewSession.id == self.session_id).first()
+                        if db_sess:
+                            db_sess.session_status = sess.session_status
+                            db_sess.terminal_outcome = sess.terminal_outcome
+                            db_sess.termination_reason = sess.termination_reason
+                            if sess.completed_at:
+                                db_sess.completed_at = datetime.fromtimestamp(sess.completed_at)
+                                if sess.started_at:
+                                    db_sess.duration_seconds = round(sess.completed_at - sess.started_at, 2)
+                            if final_assessment:
+                                db_sess.assessment_summary_json = json.dumps(final_assessment)
+                            db.commit()
+                            logger.info(f"Persisted assessment outcome to SQLite for {self.session_id}")
+                except Exception as db_e:
+                    logger.warning(f"Could not persist session assessment to SQLite: {db_e}")
+
             logger.info(f"Executing safe room disconnect following interview conclusion for session {self.session_id}.")
             if room:
                 await room.disconnect()
