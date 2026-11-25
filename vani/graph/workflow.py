@@ -267,8 +267,8 @@ class InterviewEngine:
         """Phase 1: Initiates a new session and returns the spoken greeting through LangGraph."""
         session = session_manager.get_or_create(session_id)
         
-        # Prevent duplicate greeting if reconnecting or already greeted
-        if session.greeting_completed and session.last_agent_utterance:
+        # Prevent duplicate greeting only if questions have already started
+        if session.greeting_completed and session.last_agent_utterance and len(session.candidate_answers) > 0:
             return session.last_agent_utterance
 
         session.current_state = "GREETING"

@@ -50,6 +50,10 @@ async def entrypoint(ctx: JobContext) -> None:
     # Section 8 Requirement: Initialize session state with preselected Python skill
     sess = session_manager.get_or_create(session_id)
     sess.selected_skill = "Python"
+    if len(sess.candidate_answers) == 0:
+        sess.greeting_completed = False
+        sess.current_state = "GREETING"
+        sess.stage_1_status = "NOT_STARTED"
 
     ctx.log_context_fields = {
         "room": session_id,
@@ -137,7 +141,46 @@ async def entrypoint(ctx: JobContext) -> None:
 
         ctx.add_shutdown_callback(on_shutdown)
 
+        # 1. Connect agent to the LiveKit room
+        await ctx.connect()
+        logger.info(f"VANI connected to room: {session_id}. Waiting for candidate participant to join...")
+
+        # 2. Wait until the candidate actively connects to the room
+        participant = await ctx.wait_for_participant()
+        logger.info(f"Candidate participant '{participant.identity}' joined room {session_id}.")
+
+        # 3. Synchronize session status in SQLite database to IN_PROGRESS
+        try:
+            from backend.app.database import SessionLocal
+            from backend.app.models import InterviewSession
+            with SessionLocal() as db:
+                db_sess = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+                if db_sess and db_sess.session_status in ["CREATED", "CONNECTING"]:
+                    db_sess.session_status = "IN_PROGRESS"
+                    db.commit()
+        except Exception as db_err:
+            logger.warning(f"Failed to update session status to IN_PROGRESS in DB: {db_err}")
+
+        # 4. Brief 1.0s buffer allowing candidate WebRTC audio tracks & playback to establish cleanly
+        await asyncio.sleep(1.0)
+
+        # 5. Start agent session (invokes agent.on_enter which triggers greeting)
         await session.start(agent=agent, room=ctx.room)
+
+        # 6. Reconnection listener for candidate page reloads before answering questions
+        @ctx.room.on("participant_connected")
+        def on_participant_connected(remote_p: Any) -> None:
+            p_identity = getattr(remote_p, "identity", str(remote_p))
+            logger.info(f"Candidate participant reconnected: {p_identity} in room {session_id}")
+            current_sess = session_manager.get(session_id)
+            if current_sess and len(current_sess.candidate_answers) == 0:
+                async def _delayed_greet():
+                    await asyncio.sleep(1.0)
+                    logger.info(f"Repeating greeting for candidate {p_identity} upon reconnection")
+                    current_sess.greeting_completed = False
+                    current_sess.current_state = "GREETING"
+                    session.generate_reply()
+                asyncio.create_task(_delayed_greet())
     except Exception as e:
         logger.exception(f"Fatal error in VANI entrypoint for room {session_id}: {e}")
         raise

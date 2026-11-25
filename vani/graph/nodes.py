@@ -17,8 +17,8 @@ async def greeting_node(state: InterviewState) -> Dict[str, Any]:
     """Phase 1 - Step 2: Vani natural greeting and onboarding opening."""
     session = session_manager.get_or_create(state["session_id"])
     
-    # Prevent duplicate greeting if reconnecting or already greeted
-    if session.greeting_completed and session.last_agent_utterance:
+    # Prevent duplicate greeting only if questions have already started
+    if session.greeting_completed and session.last_agent_utterance and len(session.candidate_answers) > 0:
         return {
             "current_state": session.current_state,
             "agent_response": session.last_agent_utterance,
